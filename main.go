@@ -1,61 +1,96 @@
 package main
 
-import "fmt"
+import (
+	// "fmt"
+	// "math"
+	"strconv"
+)
 
-type RGB struct {
-	R, G, B uint8
-	A       float64
+func _lerp(verts [2]OkLAB, steps int) []OkLAB {
+	diff := OkLAB{
+		L:     (verts[1].L - verts[0].L) / float64(steps-1),
+		A:     (verts[1].A - verts[0].A) / float64(steps-1),
+		B:     (verts[1].B - verts[0].B) / float64(steps-1),
+		alpha: (verts[1].alpha - verts[0].alpha) / float64(steps-1),
+	}
+
+	edge := make([]OkLAB, steps)
+	edge[0] = verts[0]
+	edge[steps-1] = verts[1]
+
+	for idx := 1; idx < steps; idx++ {
+		edge[idx] = OkLAB{
+			L:     verts[0].L + float64(idx)*diff.L,
+			A:     verts[0].A + float64(idx)*diff.A,
+			B:     verts[0].B + float64(idx)*diff.B,
+			alpha: verts[0].alpha + float64(idx)*diff.alpha,
+		}
+	}
+	return edge
 }
 
-func lerp(verts [8]RGB, steps int) []RGB {
+func _bilerp(verts [2][2]OkLAB, steps int) [][]OkLAB {
+	face := make([][]OkLAB, steps)
+	for i := range face {
+		face[i] = make([]OkLAB, steps)
+	}
 
-	_lerp := func(verts []RGB, step float64) RGB {
-		ret := RGB{
-			R: uint8(float64(verts[0].R)*(1-step) + float64(verts[1].R)),
-			G: uint8(float64(verts[0].G)*(1-step) + float64(verts[1].G)),
-			B: uint8(float64(verts[0].B)*(1-step) + float64(verts[1].B)),
-			A: 1.0,
+	low_col := _lerp([2]OkLAB{verts[0][0], verts[1][0]}, steps)
+	high_col := _lerp([2]OkLAB{verts[0][1], verts[1][1]}, steps)
+
+	for i := 0; i < steps; i++ {
+		face[i] = _lerp([2]OkLAB{low_col[i], high_col[i]}, steps)
+	}
+
+	return face
+}
+
+func _trilerp(verts [2][2][2]OkLAB, steps int) [][][]OkLAB {
+	volume := make([][][]OkLAB, steps)
+	corners := make([][]OkLAB, steps)
+	corners[0] = _lerp([2]OkLAB{verts[0][0][0], verts[1][0][0]}, steps)
+	corners[1] = _lerp([2]OkLAB{verts[0][0][1], verts[1][0][1]}, steps)
+	corners[2] = _lerp([2]OkLAB{verts[0][1][0], verts[1][1][0]}, steps)
+	corners[3] = _lerp([2]OkLAB{verts[0][1][1], verts[1][1][1]}, steps)
+
+	for i := 0; i < steps; i++ {
+		plane := [2][2]OkLAB{
+			{corners[0][i], corners[1][i]},
+			{corners[2][i], corners[3][i]},
 		}
-		fmt.Printf("#%02x%02x%02x\n", ret.R, ret.G, ret.B)
-		return ret
-	}
-	_bilerp := func(verts []RGB, x, y float64) RGB {
-		return _lerp([]RGB{
-			_lerp(verts[:2], x),
-			_lerp(verts[2:], x),
-		}, y)
-	}
-	_trilerp := func(verts [8]RGB, x, y, z float64) RGB {
-		return _lerp([]RGB{
-			_bilerp(verts[:4], x, y),
-			_bilerp(verts[4:], x, y),
-		}, z)
+		volume[i] = _bilerp(plane, steps)
 	}
 
-	var ret = make([]RGB, steps^3)
-
-	for r := 1; r <= steps; r++ {
-		for g := 1; g <= steps; g++ {
-			for b := 1; b <= steps; b++ {
-				fmt.Printf("%d %d %d\n", r, g, b)
-				ret = append(ret, _trilerp(verts, float64(r/steps), float64(g/steps), float64(b/steps)))
-			}
-		}
-	}
-	return ret
+	return volume
 }
 
 func main() {
-	verts := [8]RGB{
-		{R: 0, G: 0, B: 0, A: 1.0},
-		{R: 0, G: 0, B: 255, A: 1.0},
-		{R: 0, G: 255, B: 0, A: 1.0},
-		{R: 0, G: 255, B: 255, A: 1.0},
-		{R: 255, G: 0, B: 0, A: 1.0},
-		{R: 255, G: 0, B: 255, A: 1.0},
-		{R: 255, G: 255, B: 0, A: 1.0},
-		{R: 255, G: 255, B: 255, A: 1.0},
+	v_rgba := [8]RGBA{
+		{R: 0, G: 0, B: 0, alpha: 1.0},
+		{R: 0, G: 0, B: 255, alpha: 1.0},
+		{R: 0, G: 255, B: 0, alpha: 1.0},
+		{R: 0, G: 255, B: 255, alpha: 1.0},
+		{R: 255, G: 0, B: 0, alpha: 1.0},
+		{R: 255, G: 0, B: 255, alpha: 1.0},
+		{R: 255, G: 255, B: 0, alpha: 1.0},
+		{R: 255, G: 255, B: 255, alpha: 1.0},
 	}
-	lerp(verts, 6)
-	// fmt.Println(RGB{R: 5, G: 6, B: 200, A: 1.0})
+
+	verts := [2][2][2]OkLAB{
+		{
+			{v_rgba[0].ToOkLab(), v_rgba[1].ToOkLab()},
+			{v_rgba[2].ToOkLab(), v_rgba[3].ToOkLab()},
+		}, {
+			{v_rgba[4].ToOkLab(), v_rgba[5].ToOkLab()},
+			{v_rgba[6].ToOkLab(), v_rgba[7].ToOkLab()},
+		},
+	}
+	const steps = 6
+	out := _trilerp(verts, steps)
+	imgs := Export_Cube(out)
+	for idx, img := range imgs {
+		SaveImg(img, "./images/"+strconv.Itoa(idx)+".png")
+	}
 }
+
+// vim: set noet ts=4 sw=4 ff=unix
