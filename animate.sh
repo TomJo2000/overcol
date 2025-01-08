@@ -1,8 +1,8 @@
 #!/bin/env bash
 
 input_folder="images"
-output_file="slideshow.mp4"
-framerate=30
+output_file="images/slideshow.mp4"
+framerate=${1:-30}
 bitrate="6000k"
 crf="1" #constant rate factor
 preset="veryslow"
