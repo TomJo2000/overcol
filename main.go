@@ -4,7 +4,7 @@ import (
 	"fmt"
 
 	cs "github.com/TomJo2000/overcol/colorspaces"
-	"github.com/TomJo2000/overcol/export"
+	ex "github.com/TomJo2000/overcol/export"
 )
 
 func _lerp(verts [2]cs.OkLAB, steps int) []cs.OkLAB {
@@ -39,7 +39,7 @@ func _bilerp(verts [2][2]cs.OkLAB, steps int) [][]cs.OkLAB {
 	low_col := _lerp([2]cs.OkLAB{verts[0][0], verts[1][0]}, steps)
 	high_col := _lerp([2]cs.OkLAB{verts[0][1], verts[1][1]}, steps)
 
-	for i := 0; i < steps; i++ {
+	for i := range steps {
 		face[i] = _lerp([2]cs.OkLAB{low_col[i], high_col[i]}, steps)
 	}
 
@@ -54,7 +54,7 @@ func _trilerp(verts [2][2][2]cs.OkLAB, steps int) [][][]cs.OkLAB {
 	corners[2] = _lerp([2]cs.OkLAB{verts[0][1][0], verts[1][1][0]}, steps)
 	corners[3] = _lerp([2]cs.OkLAB{verts[0][1][1], verts[1][1][1]}, steps)
 
-	for i := 0; i < steps; i++ {
+	for i := range steps {
 		plane := [2][2]cs.OkLAB{
 			{corners[0][i], corners[1][i]},
 			{corners[2][i], corners[3][i]},
@@ -94,13 +94,13 @@ func main() {
 	const steps = 6
 	var output_OkLAB [][][]cs.OkLAB
 	// output_OkLAB = _trilerp(verts, steps*90)
-	// imgs := export.Export_Cube(output_OkLAB)
+	// imgs := ex.Export_Cube(output_OkLAB)
 	// for idx, img := range imgs {
-	// 	export.Save_PNG(img, "./images/"+strconv.Itoa(idx)+".png")
+	// 	ex.Save_PNG(img, "./images/"+strconv.Itoa(idx)+".png")
 	// }
 
 	output_OkLAB = _trilerp(verts, steps)
-	output := export.Ansi_Cube(output_OkLAB, export.AnsiOpts{Format: "%d%d%d", Indices: true, Spacing: 3})
+	output := ex.Ansi_Cube(output_OkLAB, ex.AnsiOpts{Format: ex.OutputIndex})
 	fmt.Print(output)
 	// fmt.Println(time.Since(start))
 	// fmt.Printf("%#v\n", os.Args)

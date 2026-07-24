@@ -1,8 +1,13 @@
 package colorspaces
 
 import (
+	// Used by ToLAB()
 	"github.com/alltom/oklab"
 	"image/color"
+	// Used by AnsiString()
+	"fmt"
+	"math"
+	"strconv"
 )
 
 // RGBA uses float64 for higher precision when transforming value
@@ -22,4 +27,24 @@ func (rgba_color RGBA) ToLAB() OkLAB {
 	okl := oklab.OklabModel.Convert(rgba).(oklab.Oklab)
 
 	return OkLAB{L: okl.L, A: okl.A, B: okl.B}
+}
+
+// Convert RGBA value to AnsiString
+func (t RGBA) AnsiString() string {
+	const bg = "48;2;"
+	var (
+		luma = int(t.R)*299 + int(t.G)*587 + int(t.B)*114 // Luma per Rec.709
+		fg   string
+	)
+
+	// If Luma is greater than 50% of the maximum use a black foreground
+	if luma > math.MaxUint8*1000/2 {
+		fg = "30;"
+	}
+
+	return fmt.Sprintf("\x1b[%s%s%s;%s;%sm", fg, bg,
+		strconv.FormatUint(uint64(t.R), 10), // Red channel
+		strconv.FormatUint(uint64(t.G), 10), // Green channel
+		strconv.FormatUint(uint64(t.B), 10), // Blue channel
+	)
 }
