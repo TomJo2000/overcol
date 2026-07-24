@@ -3,19 +3,11 @@ package export
 import (
 	"cmp"
 	"fmt"
-	cs "github.com/TomJo2000/overcol/colorspaces"
 	"strings"
+	"sync"
+
+	cs "github.com/TomJo2000/overcol/colorspaces"
 )
-
-type OutputFormat int
-
-type tuple[A any, B any] struct {
-	String A
-	Count  B
-}
-
-type Padding tuple[string, int]
-type Gaps tuple[string, int]
 
 const (
 	esc_reset string       = "\x1b[m"
@@ -24,25 +16,34 @@ const (
 	OutputValue
 )
 
-type AnsiOpts struct {
-	Format  OutputFormat // format string for the values
-	Padding Padding
-	Gaps    Gaps
-}
+type (
+	tuple[A, B any] struct {
+		String A
+		Count  B
+	}
+	OutputFormat int
+	Padding      tuple[string, int]
+	Gaps         tuple[string, int]
+	AnsiOpts     struct {
+		Format  OutputFormat
+		Gaps    Gaps
+		Padding Padding
+	}
+)
 
 func Ansi_Cube(cube [][][]cs.OkLAB, opts AnsiOpts) string {
 	var (
-		// padding = strings.Repeat(
-		// 	cmp.Or(opts.Padding.String, " "),
-		// 	cmp.Or(opts.Padding.Count, 1),
-		// )
-		gaps = strings.Repeat(
+		size     = len(cube)
+		segments = make([][]string, size)
+		gaps     = strings.Repeat(
 			cmp.Or(opts.Gaps.String, " "),
 			cmp.Or(opts.Gaps.Count, 3),
 		)
-		output       = strings.Builder{}
-		size         = len(cube)
-		segments     = make([][]string, size*size)
+		padding = strings.Repeat(
+			cmp.Or(opts.Padding.String, " "),
+			cmp.Or(opts.Padding.Count, 1),
+		)
+		output       strings.Builder
 		outputFormat = func(o OutputFormat, ansiString string, val cs.RGBA) string {
 			var format_string string
 			switch o {
@@ -56,7 +57,6 @@ func Ansi_Cube(cube [][][]cs.OkLAB, opts AnsiOpts) string {
 
 			return fmt.Sprintf(format_string, ansiString, val.R, val.G, val.B, esc_reset)
 		}
-
 		val = func(r, g, b int) cs.RGBA { return cube[r][g][b].ToRGBA() }
 	)
 
@@ -64,33 +64,34 @@ func Ansi_Cube(cube [][][]cs.OkLAB, opts AnsiOpts) string {
 		val = func(r, g, b int) cs.RGBA { return cs.RGBA{R: uint8(r), G: uint8(g), B: uint8(b), A: 0xFF} }
 	}
 
-	line := strings.Builder{}
+	var lock sync.WaitGroup
 	for g := range size {
-		segments[g] = make([]string, size)
-		for r := range size {
-			for b := range size {
-				line.WriteString(
-					outputFormat(opts.Format, cube[r][g][b].ToRGBA().AnsiString(), val(r, g, b)),
-				)
+		lock.Add(1)
+		go func(g int) {
+			defer lock.Done()
+
+			segments[g] = make([]string, size)
+
+			var line strings.Builder
+			for r := range size {
+				line.Reset()
+				if r%(size/2) != 0 {
+					line.WriteString(gaps)
+				}
+
+				for b := range size {
+					if b%size != 0 {
+						line.WriteString(padding)
+					}
+					line.WriteString(
+						outputFormat(opts.Format, cube[r][g][b].ToRGBA().AnsiString(), val(r, g, b)),
+					)
+				}
+				segments[g][r] = line.String()
 			}
-			line.WriteString(gaps)
-			segments[g][r] = line.String()
-			line.Reset()
-		}
+		}(g)
 	}
-
-	for x := 0; x < size; x++ {
-		for y := 0; y < size/2; y++ {
-			output.WriteString(segments[x][y])
-		}
-		output.WriteString("\n")
-	}
-
-	output.WriteString("\n")
-
-	for x := 0; x < size; x++ {
-		for y := size / 2; y < size; y++ {
-			output.WriteString(segments[x][y])
+	lock.Wait()
 
 	for n := range size * 2 {
 		switch {
